@@ -1,8 +1,4 @@
 <?php
-/**
- * HostGraber PartnerCloud WHMCS Module - Reseller Side
- * File: /whmcs/modules/servers/hostgraber_partnercloud_reseller/hostgraber_partnercloud_reseller.php
- */
 
 if (!defined('WHMCS')) die('Access denied');
 
@@ -87,7 +83,7 @@ function _hgpc_res_log(array $params, string $action, array $request = [], array
             ['X-Panel-Token', 'serverpassword', 'serveraccesshash', 'password', 'root_password', 'client_password', 'servicepassword']
         );
     } catch (Throwable $e) {
-        // Never let logging break provisioning.
+        
     }
 }
 
@@ -403,19 +399,19 @@ function hostgraber_partnercloud_reseller_VpsPlanLoader(array $params): array {
 }
 
 function hostgraber_partnercloud_reseller_OsVersionLoader(array $params): array {
-    return _hgpc_res_loaderOptions($params, 'SolusVM OS Version');
+    return _hgpc_res_loaderOptions($params, 'PC OS Version');
 }
 
 function hostgraber_partnercloud_reseller_LocationLoader(array $params): array {
-    return _hgpc_res_loaderOptions($params, 'SolusVM Location', true, 'Auto-select');
+    return _hgpc_res_loaderOptions($params, 'PC Location', true, 'Auto-select');
 }
 
 function hostgraber_partnercloud_reseller_ApplicationLoader(array $params): array {
-    return _hgpc_res_loaderOptions($params, 'SolusVM Application', true, 'None');
+    return _hgpc_res_loaderOptions($params, 'PC Application', true, 'None');
 }
 
 function hostgraber_partnercloud_reseller_ComputeNodeLoader(array $params): array {
-    return _hgpc_res_loaderOptions($params, 'SolusVM Compute Node', true, 'Auto-select');
+    return _hgpc_res_loaderOptions($params, 'PC Compute Node', true, 'Auto-select');
 }
 
 function hostgraber_partnercloud_reseller_PrimaryIpLoader(array $params): array {
@@ -450,11 +446,7 @@ function _sr_res_configOption(array $params, array $names): string {
         if (isset($params['configoptions'][$name]) && trim((string)$params['configoptions'][$name]) !== '') {
             $value = trim((string)$params['configoptions'][$name]);
             if (strpos($value, '|') !== false) {
-                // SolusVM's documented convention for these dropdowns is
-                // "ID|Display Name" (ID first, label second - see
-                // docs.solusvm.com .../configurable-options/operating-system/).
-                // Always take the FIRST segment (the ID actually sent to the
-                // API), never the last (the human-readable label).
+                
                 $parts = explode('|', $value);
                 $value = trim((string) $parts[0]);
             }
@@ -565,7 +557,6 @@ function _hgpc_res_idValue($value): string {
 function _sr_res_getVpsId(array $params): ?int {
     $notes = $params['model']['notes'] ?? '';
     if (preg_match('/HostGraber PartnerCloud VPS: (\d+)/', $notes, $m)) return (int)$m[1];
-    if (preg_match('/SolusReseller VPS: (\d+)/', $notes, $m)) return (int)$m[1];
 
     $serviceId = (int)($params['serviceid'] ?? 0);
     if ($serviceId <= 0) return null;
@@ -577,10 +568,6 @@ function _sr_res_getVpsId(array $params): ?int {
         return $vpsId;
     }
 
-    // Last resort: notes marker missing/wrong AND this VPS was never tagged
-    // with whmcs_service_id (e.g. provisioned before that linking existed,
-    // or notes got overwritten by something else). Pull the reseller's full
-    // inventory and match by hostname instead of giving up with a 404.
     $vpsId = _hgpc_res_findVpsByHostname($params);
     if ($vpsId > 0) {
         _hgpc_res_healNotes($params, $vpsId, $notes);
@@ -605,17 +592,12 @@ function _hgpc_res_findVpsByHostname(array $params): int {
     foreach (($r['data']['vps'] ?? []) as $row) {
         $rowHostname = strtolower(trim((string) ($row['hostname'] ?? '')));
         if ($rowHostname !== '' && in_array($rowHostname, $candidates, true)) {
-            return (int) ($row['solusvm_id'] ?? 0);
+            return (int) ($row['vm_id'] ?? 0);
         }
     }
     return 0;
 }
 
-/**
- * Once a VPS is found via the slower fallback lookups, write the standard
- * marker back into the WHMCS service notes so future calls hit the fast,
- * free (no API round-trip) tier-1 lookup instead of repeating the fallback.
- */
 function _hgpc_res_healNotes(array $params, int $vpsId, string $existingNotes): void {
     if (empty($params['serviceid']) || preg_match('/HostGraber PartnerCloud VPS: \d+/', $existingNotes)) {
         return;
@@ -626,7 +608,7 @@ function _hgpc_res_healNotes(array $params, int $vpsId, string $existingNotes): 
             'notes' => trim($existingNotes . "\nHostGraber PartnerCloud VPS: " . $vpsId),
         ]);
     } catch (Throwable $e) {
-        // Best-effort only - a failure here must not break the calling action.
+        
     }
 }
 
@@ -637,22 +619,13 @@ function _hgpc_res_postPassword(): string {
     return '';
 }
 
-/**
- * Converts a #rrggbb or #rgb hex color into an rgba(...) string with the
- * given alpha, so the client-area widget can render a proper light TINT of
- * the reseller's brand color (matching the tinted style used for the
- * semantic success/danger/warn/info chips) instead of a flat solid fill.
- * Inline-computed here (not CSS) so it can't be affected by the theme's own
- * CSS specificity or by Smarty {literal} substitution pitfalls.
- */
 function _hgpc_res_hexToRgba(string $hex, float $alpha): string {
     $hex = ltrim(trim($hex), '#');
     if (strlen($hex) === 3) {
         $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
     }
     if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
-        // Not a valid hex color (unexpected data) - fall back to a neutral
-        // grey tint rather than silently breaking the layout.
+        
         return "rgba(127,127,127,{$alpha})";
     }
     $r = hexdec(substr($hex, 0, 2));
@@ -671,13 +644,6 @@ function _hgpc_res_generatePassword(int $length = 18): string {
     return $password;
 }
 
-/**
- * PartnerCloud's SolusVM 2 backend always AUTO-GENERATES the root password on
- * reset and returns it in the response - it does not honor a caller-supplied
- * password (confirmed by every other reset-password call site in the portal,
- * which never sends one either). Extract the real, applied password from the
- * API response instead of trusting whatever WHMCS was told to set.
- */
 function _hgpc_res_extractPassword(array $response): string {
     $paths = [
         ['data', 'password'],
@@ -704,15 +670,6 @@ function _hgpc_res_extractPassword(array $response): string {
     return '';
 }
 
-/**
- * WHMCS has its own native "Domain" (hostname) and "Dedicated IP" fields on
- * every service, separate from whatever the portal/SolusVM actually has.
- * Nothing keeps these in sync automatically - WHMCS doesn't call the module
- * just because an admin looks at a service. Call this after any action that
- * might have changed the VPS's hostname or IP so WHMCS's own fields (visible
- * in Admin > Client > Products/Services, and used anywhere WHMCS itself
- * displays "Domain"/"Dedicated IP") always reflect the real, current state.
- */
 function _hgpc_res_syncWhmcsFields(array $params, int $vpsId): void {
     if (empty($params['serviceid'])) {
         return;
@@ -737,7 +694,7 @@ function _hgpc_res_syncWhmcsFields(array $params, int $vpsId): void {
     try {
         localAPI('UpdateClientProduct', ['serviceid' => $params['serviceid']] + $update);
     } catch (Throwable $e) {
-        // Best-effort only - a sync failure must not break the calling action.
+        
     }
 }
 
@@ -751,9 +708,7 @@ function hostgraber_partnercloud_reseller_CreateAccount(array $params): string {
     $appId = _hgpc_res_idValue($params['configoption7'] ?? '');
     $primaryIp = _hgpc_res_idValue($params['configoption8'] ?? '');
     $nodeId = _hgpc_res_idValue($params['configoption10'] ?? '');
-    // Exactly one Configurable Option name accepted per resource - keep the
-    // WHMCS setup unambiguous. All still use the "id|Label" value convention
-    // (id first, label second) documented by SolusVM.
+    
     $configuredPlan = _sr_res_configOption($params, ['Plan']);
     if ($configuredPlan !== '') $planId = $configuredPlan;
     $configuredOs = _sr_res_configOption($params, ['Operating System']);
@@ -771,13 +726,7 @@ function hostgraber_partnercloud_reseller_CreateAccount(array $params): string {
 
     $hostname = _hgpc_res_hostname($params);
     $rootPassword = _hgpc_res_secretValue($params['password'] ?? '') ?: _hgpc_res_generatePassword();
-    // SolusVM 2 only accepts letters, numbers, and !@#$%^&*- in the root
-    // password. WHMCS's own password auto-generator is not constrained to
-    // that charset (it commonly includes characters like _ . ~ ` '), and
-    // passing one of those through fails with a SolusVM validation error
-    // *during provisioning* - i.e. this must be checked before the API call,
-    // not after. If the WHMCS-issued password doesn't comply, replace it with
-    // one we know is safe; the servicepassword gets corrected below either way.
+    
     if (!preg_match('/^[A-Za-z0-9!@#$%^&*\-]+$/', $rootPassword)) {
         $rootPassword = _hgpc_res_generatePassword();
     }
@@ -822,9 +771,7 @@ function hostgraber_partnercloud_reseller_CreateAccount(array $params): string {
             'domain'=>$hostname,
             'notes'=>'HostGraber PartnerCloud VPS: '.$result['vps_id']."\nHostname: ".$hostname,
         ]);
-        // The final assigned primary IP isn't known until SolusVM finishes
-        // provisioning; pull it once and mirror it into WHMCS's own
-        // Dedicated IP field so admin/reseller/client all agree on it.
+        
         _hgpc_res_syncWhmcsFields($params, (int) $result['vps_id']);
         _hgpc_res_log($params, 'create-account-success', ['serviceid' => $params['serviceid'] ?? null], $result, true);
         return 'success';
@@ -836,28 +783,12 @@ function hostgraber_partnercloud_reseller_CreateAccount(array $params): string {
 function hostgraber_partnercloud_reseller_SuspendAccount(array $params): string { $vpsId=_sr_res_getVpsId($params); if(!$vpsId)return 'Error: VPS ID not found'; $r=_sr_res_api($params,"whmcs/vps/{$vpsId}/suspend",'POST'); return _sr_res_ok($r)?'success':'Error: '._sr_res_msg($r); }
 function hostgraber_partnercloud_reseller_UnsuspendAccount(array $params): string { $vpsId=_sr_res_getVpsId($params); if(!$vpsId)return 'Error: VPS ID not found'; $r=_sr_res_api($params,"whmcs/vps/{$vpsId}/unsuspend",'POST'); return _sr_res_ok($r)?'success':'Error: '._sr_res_msg($r); }
 function hostgraber_partnercloud_reseller_TerminateAccount(array $params): string { $vpsId=_sr_res_getVpsId($params); if(!$vpsId)return 'Error: VPS ID not found'; $r=_sr_res_api($params,"whmcs/vps/{$vpsId}/terminate",'POST'); return _sr_res_ok($r)?'success':'Error: '._sr_res_msg($r); }
-/**
- * Deliberately NOT named hostgraber_partnercloud_reseller_ChangePassword.
- *
- * WHMCS shows the "Change Password" link in the client area sidebar purely
- * because a module function of that exact name exists (function_exists()
- * check) - there is no config option or clientarea hook that suppresses it
- * once that function is present, regardless of what ClientAreaAllowedFunctions
- * returns. The only reliable way to remove it is to not expose a function by
- * that name at all. Admin still gets equivalent capability via the "Reset
- * Password" custom button below; clients get it via our own custom widget
- * button (_hgpc_res_ajax's 'password' action), which is entirely separate
- * from WHMCS's native change-password mechanism.
- */
+
 function _hgpc_res_doPasswordReset(array $params): string {
     $vpsId = _sr_res_getVpsId($params);
     if (!$vpsId) return 'Error: VPS ID not found';
     $requestedPassword = _hgpc_res_postPassword() ?: ($params['password'] ?? '');
 
-    // NOTE: SolusVM 2's reset-password endpoint always auto-generates the new
-    // password server-side and ignores any password we send it (this matches
-    // every other reset-password call site in the PartnerCloud portal, none
-    // of which pass a body).
     $r = _sr_res_api($params, "whmcs/vps/{$vpsId}/reset-password", 'POST');
     if (!_sr_res_ok($r)) return 'Error: ' . _sr_res_msg($r);
 
@@ -872,14 +803,14 @@ function _hgpc_res_doPasswordReset(array $params): string {
             'servicepassword' => $actualPassword,
         ]);
     } catch (Throwable $e) {
-        // Ignore - the message below still surfaces the real password.
+        
     }
 
     if ($requestedPassword !== '' && hash_equals($actualPassword, $requestedPassword)) {
         return 'success';
     }
 
-    return 'Password reset. SolusVM generated a new password (' . $actualPassword . ') - saved to this service automatically.';
+    return 'Password reset. A new password was generated (' . $actualPassword . ') and saved to this service automatically.';
 }
 
 function _hgpc_res_ajax(array $params, int $vpsId): void {
@@ -899,12 +830,7 @@ function _hgpc_res_ajax(array $params, int $vpsId): void {
         echo json_encode($r); exit;
     }
     if ($action === 'sso') { echo json_encode(_sr_res_api($params, "whmcs/vps/{$vpsId}/login-token", 'POST')); exit; }
-    // 'purpose' => 'console' is required so the portal's sso.php can tell this
-    // apart from a plain "Sign in to PartnerCloud" token (same endpoint,
-    // same vps_id otherwise) and land the browser on console.php instead of
-    // the client dashboard. This needs the matching portal-side changes to
-    // api/v1/index.php (login-token handler) and auth/sso.php - see the
-    // reference patches provided alongside this module.
+    
     if ($action === 'vnc-sso') { echo json_encode(_sr_res_api($params, "whmcs/vps/{$vpsId}/login-token", 'POST', ['purpose' => 'console'])); exit; }
     if ($action === 'hostname') {
         $hostname = trim((string) ($_POST['hostname'] ?? ''));
@@ -913,18 +839,13 @@ function _hgpc_res_ajax(array $params, int $vpsId): void {
             try {
                 localAPI('UpdateClientProduct', ['serviceid' => $params['serviceid'], 'domain' => $hostname]);
             } catch (Throwable $e) {
-                // Ignore - the hostname change itself already succeeded on the VPS.
+                
             }
         }
         echo json_encode($r); exit;
     }
     if ($action === 'password') {
-        // SolusVM always auto-generates the password on reset and ignores any
-        // value we send it, so the requested password is not forwarded. The
-        // real, applied password is returned to the browser under data.password
-        // so the client-area widget can display the value that actually works,
-        // and it's pushed into WHMCS's own service password field too so the
-        // admin-visible password never drifts from the real VPS root password.
+        
         $r = _sr_res_api($params, "whmcs/vps/{$vpsId}/reset-password", 'POST');
         $actual = _hgpc_res_extractPassword($r);
         if (_sr_res_ok($r) && $actual !== '') {
@@ -932,10 +853,10 @@ function _hgpc_res_ajax(array $params, int $vpsId): void {
                 try {
                     localAPI('UpdateClientProduct', ['serviceid' => $params['serviceid'], 'servicepassword' => $actual]);
                 } catch (Throwable $e) {
-                    // Ignore - the reset itself already succeeded on the VPS.
+                    
                 }
             }
-            echo json_encode(['success' => true, 'message' => 'Password reset. SolusVM generated a new password.', 'data' => ['password' => $actual]]);
+            echo json_encode(['success' => true, 'message' => 'Password reset. A new password was generated.', 'data' => ['password' => $actual]]);
         } else {
             echo json_encode($r);
         }
@@ -954,20 +875,20 @@ function hostgraber_partnercloud_reseller_ClientArea(array $params): array {
     $brand = $catalog['brand'] ?? [];
     $stats = [];
     $local = [];
+    $allIps = [];
     $rootPassword = $params['password'] ?? '';
     if ($vpsId) {
         $r = _sr_res_api($params,"whmcs/vps/{$vpsId}/stats",'GET');
         $stats = $r['data'] ?? [];
         $local = $stats['local'] ?? [];
+        $allIps = $stats['ips'] ?? [];
     }
     $brandPrimary = $brand['primary_color'] ?? '#00921A';
     $brandSecondary = $brand['secondary_color'] ?? '#00d334';
     $brandCompany = $brand['company_name'] ?? 'HostGraber PartnerCloud';
     $brandLogo = $brand['logo'] ?? '';
     if (empty($brand) && _hgpc_res_debugEnabled($params)) {
-        // If this fires, the reseller's real brand colors were never fetched
-        // at all and the hardcoded HostGraber default (#00921A green) is
-        // being shown instead - that's a catalog/API problem, not a CSS one.
+        
         _hgpc_res_log($params, 'clientarea-brand-fallback', ['serviceid' => $params['serviceid'] ?? null], [
             'message' => 'catalog/options fetch returned no brand data - using hardcoded default color',
             'catalog_keys' => array_keys($catalog),
@@ -977,14 +898,13 @@ function hostgraber_partnercloud_reseller_ClientArea(array $params): array {
     $brandPrimaryTintBorder = _hgpc_res_hexToRgba($brandPrimary, 0.4);
     $brandPrimaryIconBg = _hgpc_res_hexToRgba($brandPrimary, 0.22);
     if ($brandLogo !== '' && !preg_match('#^https?://#i', $brandLogo)) {
-        // Logo paths from the portal are relative (e.g. /assets/uploads/logos/x.png).
-        // This template renders inside WHMCS's own domain, so a relative path
-        // resolves against the wrong site and the image silently 404s.
+        
         $brandLogo = $panelUrl . '/' . ltrim($brandLogo, '/');
     }
     $brandCustomCss = $brand['custom_css'] ?? '';
     $displayHostname = $local['hostname'] ?? 'PartnerCloud VPS';
     $displayIp = $local['primary_ip'] ?? 'IP pending';
+    $displayIpv6 = $local['primary_ipv6'] ?? '';
     $displayOs = $local['os_label'] ?? trim(($local['os_name'] ?? '') . ' ' . ($local['os_version_name'] ?? ''));
     if ($displayOs === '') {
         $displayOs = 'Unknown';
@@ -1011,23 +931,20 @@ function hostgraber_partnercloud_reseller_ClientArea(array $params): array {
         'brand_custom_css'=>$brandCustomCss,
         'display_hostname'=>$displayHostname,
         'display_ip'=>$displayIp,
+        'display_ipv6'=>$displayIpv6,
+        'all_ips'=>$allIps,
         'display_os'=>$displayOs,
-        'os_options'=>_hgpc_res_groupOptions($catalog, 'SolusVM OS Version'),
-        'os_options_json'=>json_encode(_hgpc_res_groupOptions($catalog, 'SolusVM OS Version'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT),
+        'os_options'=>_hgpc_res_groupOptions($catalog, 'PC OS Version'),
+        'os_options_json'=>json_encode(_hgpc_res_groupOptions($catalog, 'PC OS Version'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT),
         'brand'=>$brand,
-        // Single safely-encoded blob for the inline <script> block. Using one
-        // json_encode() call with the HEX_* flags (which escapes <, >, ', ",
-        // and & as \uXXXX) is far more robust than hand-assembling JS with
-        // per-field Smarty {literal} toggling and mixed escape modifiers -
-        // any stray quote/backslash in a password or URL could otherwise
-        // break the script and take down the whole widget with a SyntaxError.
+        
         'hgpc_config_json'=>json_encode([
             'password'=>$rootPassword,
             'serviceId'=>$params['serviceid'] ?? '',
             'consoleUrl'=>$vpsId ? $panelUrl.'/console.php?vps_id='.urlencode((string)$vpsId) : '',
             'panelUrl'=>$panelUrl.'/client/',
             'brandPrimary'=>$brandPrimary,
-            'osOptions'=>_hgpc_res_groupOptions($catalog, 'SolusVM OS Version'),
+            'osOptions'=>_hgpc_res_groupOptions($catalog, 'PC OS Version'),
         ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT),
     ]];
 }
@@ -1037,12 +954,7 @@ function hostgraber_partnercloud_reseller_ClientAreaAllowedFunctions(): array { 
 function hostgraber_partnercloud_reseller_AdminCustomButtonArray(): array { return ['Sync Status'=>'SyncStatus', 'Reset Password'=>'AdminResetPassword']; }
 function hostgraber_partnercloud_reseller_AdminResetPassword(array $params): string {
     $result = _hgpc_res_doPasswordReset($params);
-    // Same WHMCS contract issue as SyncStatus above: only a literal 'success'
-    // avoids the "Module Command Error" wrapper. The real generated password
-    // is already saved into this service's own Password field (see
-    // UpdateClientProduct inside _hgpc_res_doPasswordReset), so the admin can
-    // see it there immediately - nothing else needs to come back through
-    // this button's return value.
+    
     return str_starts_with($result, 'Error:') ? $result : 'success';
 }
 function hostgraber_partnercloud_reseller_TestConnection(array $params): array {
@@ -1066,19 +978,13 @@ function hostgraber_partnercloud_reseller_TestConnection(array $params): array {
     return ['success' => false, 'error' => $message, 'message' => $message];
 }
 
-// AdminCustomButtonArray functions must return a plain string (WHMCS shows it
-// as the result message directly) - not an array. That mismatch is why the
-// "Sync Status" button previously appeared to do nothing.
 function hostgraber_partnercloud_reseller_SyncStatus(array $params): string {
     $vpsId = _sr_res_getVpsId($params);
     if (!$vpsId) return 'Error: VPS ID not found. Check the service notes for a "HostGraber PartnerCloud VPS: <id>" marker.';
     $r = _sr_res_api($params, "whmcs/vps/{$vpsId}/sync", 'POST');
     if (!_sr_res_ok($r)) return 'Error: ' . _sr_res_msg($r);
     _hgpc_res_syncWhmcsFields($params, $vpsId);
-    // WHMCS admin custom buttons treat any non-'success' string as an error
-    // (shown as "Module Command Error: <text>") even when the text describes
-    // a successful outcome - so a literal 'success' is required here, not a
-    // descriptive message.
+    
     return 'success';
 }
 
@@ -1089,6 +995,7 @@ function hostgraber_partnercloud_reseller_AdminServicesTabFields(array $params):
     }
     $r = _sr_res_api($params, "whmcs/vps/{$vpsId}/stats", 'GET');
     $state = $r['data']['local'] ?? [];
+    $allIps = $r['data']['ips'] ?? [];
     $panelUrl = _hgpc_res_baseUrl($params);
 
     $ram = (int) ($state['ram_mb'] ?? 0);
@@ -1100,6 +1007,10 @@ function hostgraber_partnercloud_reseller_AdminServicesTabFields(array $params):
         'Hostname' => $state['hostname'] ?? 'unknown',
         'Status' => trim(($state['status'] ?? 'unknown') . ' / ' . ($state['power_status'] ?? 'unknown')),
         'Primary IP' => $state['primary_ip'] ?? 'pending',
+        'All IP Addresses' => $allIps ? implode(', ', array_map(
+            static fn($ip) => $ip['ip'] . ($ip['is_primary'] ?? false ? ' (primary)' : ''),
+            $allIps
+        )) : '',
         'OS' => $os !== '' ? $os : 'unknown',
         'Application' => $state['application_label'] ?? ($state['application_name'] ?? ''),
         'CPU' => isset($state['cpu']) ? $state['cpu'] . ' vCPU' : 'unknown',
